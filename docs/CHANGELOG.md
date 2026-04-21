@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 桌面端版本展示改为统一读取 `apps/dsa-desktop/package.json`：移除 preload 中硬编码的 `0.1.0`，并在设置页展示真实桌面端版本，避免开发态与打包态长期显示错误版本号。
 
 - [新功能] 集成 Longbridge OpenAPI 作为美股/港股可选数据源；配置 `LONGBRIDGE_*` 后优先使用长桥获取日线与实时行情，YFinance / AkShare 兜底；未配置时行为与此前一致。长桥联调请使用 `tests/longbridge_live_smoke.py`（手动脚本，不参与 pytest 收集）。
+- [新功能] 主分析链路新增 Longbridge CLI 资讯层优先接入：对美股/港股优先读取 `news`、`filing`、`consensus`、`institution-rating` 四类结构化内容，再由现有搜索链路补齐缺失维度。
 - [文档] 澄清 README（中/英/繁）中长桥「首选 / 兜底 / 未配置不调用」的边界；`docs/README_EN.md` / `docs/README_CHT.md` 顶部导航与完整指南链接改为 `./` 相对路径，避免在文档子目录下解析错误；`LONGBRIDGE_PRINT_QUOTE_PACKAGES` 与代码及 `.env.example` 对齐为未设置时默认关闭。
 - [修复] 港股名称获取失败问题 — 修复当主数据源字段缺失时无法正确回退到备用字段获取港股名称的问题（fixes #940）
 - [修复] SSE 任务流断开时 CancelledError 被静默吞掉问题 — 修复 SSE 流中断时异常未向上抛出导致故障无日志可查的问题，现在正确 re-raise CancelledError（fixes #967）

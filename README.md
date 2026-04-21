@@ -51,6 +51,8 @@
 | 推送 | 多渠道通知 | 企业微信、飞书、Telegram、Discord、Slack、钉钉、邮件、Pushover |
 | 自动化 | 定时运行 | GitHub Actions 定时执行，无需服务器 |
 
+> **Longbridge 双通道说明（仅美股/港股）**：Longbridge OpenAPI 继续负责日线 / 实时行情补全；若本机已安装并登录 `longbridge` CLI，主分析链路会优先用 Longbridge CLI 拉取 `news` / `filing` / `consensus` / `institution-rating` 四类结构化资讯，再由现有搜索引擎补 `risk_check` / `industry` 和其它缺失维度。CLI 不可用时，系统自动退回原有搜索链路。
+>
 > 历史报告详情会优先展示 AI 返回的原始「狙击点位」文本，避免区间价、条件说明等复杂内容在历史回看时被压缩成单个数字。
 
 > 回测页现支持“次日验证 / 1 日窗口”视图，可按股票代码和分析日期范围查看当时 AI 预测、次日实际涨跌以及区间准确率；该视图基于历史分析记录与 1 日回测结果，不代表真实成交流水。
