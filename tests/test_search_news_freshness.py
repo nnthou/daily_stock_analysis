@@ -532,5 +532,48 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         self.assertEqual(parsed, expected_local_date)
 
 
+    def test_search_comprehensive_intel_only_queries_requested_dimensions(self) -> None:
+        service, mock_search = self._create_service_with_mock_provider(
+            news_max_age_days=3,
+            news_strategy_profile="short",
+        )
+        mock_search.side_effect = [
+            _response([_result("risk_item", None)]),
+            _response([_result("industry_item", None)]),
+        ]
+
+        with patch("src.search_service.time.sleep"):
+            intel = service.search_comprehensive_intel(
+                stock_code="600519",
+                stock_name="贵州茅台",
+                max_searches=2,
+                dimensions=["risk_check", "industry"],
+            )
+
+        self.assertEqual(list(intel.keys()), ["risk_check", "industry"])
+        self.assertEqual(mock_search.call_count, 2)
+
+    def test_search_comprehensive_intel_dimensions_preserve_declared_order(self) -> None:
+        service, mock_search = self._create_service_with_mock_provider(
+            news_max_age_days=3,
+            news_strategy_profile="short",
+        )
+        mock_search.side_effect = [
+            _response([_result("news_item", None)]),
+            _response([_result("announcement_item", None)]),
+            _response([_result("earnings_item", None)]),
+        ]
+
+        with patch("src.search_service.time.sleep"):
+            intel = service.search_comprehensive_intel(
+                stock_code="600519",
+                stock_name="贵州茅台",
+                max_searches=3,
+                dimensions=["earnings", "announcements", "latest_news"],
+            )
+
+        self.assertEqual(list(intel.keys()), ["latest_news", "announcements", "earnings"])
+
+
 if __name__ == "__main__":
     unittest.main()

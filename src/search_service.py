@@ -2957,7 +2957,8 @@ class SearchService:
         self,
         stock_code: str,
         stock_name: str,
-        max_searches: int = 3
+        max_searches: int = 3,
+        dimensions: Optional[List[str]] = None,
     ) -> Dict[str, SearchResponse]:
         """
         多维度情报搜索（同时使用多个引擎、多个维度）
@@ -3085,7 +3086,11 @@ class SearchService:
                     'strict_freshness': False,
                 },
             ]
-        
+
+        if dimensions:
+            requested = set(dimensions)
+            search_dimensions = [item for item in search_dimensions if item["name"] in requested]
+
         search_days = self._effective_news_window_days()
         target_per_dimension = 3
         provider_max_results = self._provider_request_size(target_per_dimension)
