@@ -35,7 +35,8 @@ from src.report_language import (
     localize_confidence_level,
     normalize_report_language,
 )
-from src.search_service import SearchService
+from src.search_service import SearchService, SearchResponse
+from src.services.longbridge_content_service import LongbridgeContentService
 from src.services.social_sentiment_service import SocialSentimentService
 from src.enums import ReportType
 from src.stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
@@ -154,6 +155,13 @@ class StockAnalysisPipeline:
             )
             self.social_sentiment_service = None
 
+        # 初始化 Longbridge CLI 资讯服务（可选，初始化失败不应阻断主分析流程）
+        try:
+            self.longbridge_content_service = LongbridgeContentService()
+        except Exception as exc:
+            logger.warning("Longbridge CLI 资讯服务初始化失败，将仅使用搜索服务: %s", exc, exc_info=True)
+            self.longbridge_content_service = None
+
     def _emit_progress(self, progress: int, message: str) -> None:
         """Best-effort bridge from pipeline stages to task SSE progress."""
         callback = getattr(self, "progress_callback", None)
@@ -175,6 +183,47 @@ class StockAnalysisPipeline:
                     "query_id": query_id,
                 },
             )
+
+    def _collect_intel_results(
+        self,
+        code: str,
+        stock_name: str,
+    ) -> tuple[Dict[str, SearchResponse], Optional[str]]:
+        intel_results: Dict[str, SearchResponse] = {}
+
+        if self.longbridge_content_service is not None and self.longbridge_content_service.is_available:
+            intel_results.update(self.longbridge_content_service.fetch_intel(code, stock_name))
+
+        ordered_dimensions = [
+            "latest_news",
+            "announcements",
+            "market_analysis",
+            "risk_check",
+            "earnings",
+            "industry",
+        ]
+        fallback_dimensions = [
+            dim for dim in ordered_dimensions
+            if dim in {"risk_check", "industry"} or dim not in intel_results
+        ]
+
+        if self.search_service is not None and self.search_service.is_available and fallback_dimensions:
+            search_results = self.search_service.search_comprehensive_intel(
+                stock_code=code,
+                stock_name=stock_name,
+                max_searches=len(fallback_dimensions),
+                dimensions=fallback_dimensions,
+            )
+            for dim in fallback_dimensions:
+                response = search_results.get(dim)
+                if response is not None:
+                    intel_results[dim] = response
+
+        if not intel_results or self.search_service is None:
+            return intel_results, None
+
+        news_context = self.search_service.format_intel_report(intel_results, stock_name)
+        return intel_results, news_context
 
     def fetch_and_save_stock_data(
         self, 
@@ -373,45 +422,30 @@ class StockAnalysisPipeline:
                     trend_result,
                 )
 
-            # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
-            news_context = None
+            # Step 4: 多维度情报搜索（Longbridge CLI 优先 + 搜索补缺）
             self._emit_progress(46, f"{stock_name}：正在检索新闻与舆情")
-            if self.search_service is not None and self.search_service.is_available:
-                logger.info(f"{stock_name}({code}) 开始多维度情报搜索...")
+            intel_results, news_context = self._collect_intel_results(code, stock_name)
 
-                # 使用多维度搜索（最多5次搜索）
-                intel_results = self.search_service.search_comprehensive_intel(
-                    stock_code=code,
-                    stock_name=stock_name,
-                    max_searches=5
-                )
-
-                # 格式化情报报告
-                if intel_results:
-                    news_context = self.search_service.format_intel_report(intel_results, stock_name)
-                    total_results = sum(
-                        len(r.results) for r in intel_results.values() if r.success
-                    )
-                    logger.info(f"{stock_name}({code}) 情报搜索完成: 共 {total_results} 条结果")
-                    logger.debug(f"{stock_name}({code}) 情报搜索结果:\n{news_context}")
-
-                    # 保存新闻情报到数据库（用于后续复盘与查询）
-                    try:
-                        query_context = self._build_query_context(query_id=query_id)
-                        for dim_name, response in intel_results.items():
-                            if response and response.success and response.results:
-                                self.db.save_news_intel(
-                                    code=code,
-                                    name=stock_name,
-                                    dimension=dim_name,
-                                    query=response.query,
-                                    response=response,
-                                    query_context=query_context
-                                )
-                    except Exception as e:
-                        logger.warning(f"{stock_name}({code}) 保存新闻情报失败: {e}")
+            if intel_results:
+                total_results = sum(len(r.results) for r in intel_results.values() if r.success)
+                logger.info(f"{stock_name}({code}) 情报聚合完成: 共 {total_results} 条结果")
+                logger.debug(f"{stock_name}({code}) 情报聚合结果:\n{news_context}")
+                try:
+                    query_context = self._build_query_context(query_id=query_id)
+                    for dim_name, response in intel_results.items():
+                        if response and response.success and response.results:
+                            self.db.save_news_intel(
+                                code=code,
+                                name=stock_name,
+                                dimension=dim_name,
+                                query=response.query,
+                                response=response,
+                                query_context=query_context,
+                            )
+                except Exception as e:
+                    logger.warning(f"{stock_name}({code}) 保存新闻情报失败: {e}")
             else:
-                logger.info(f"{stock_name}({code}) 搜索服务不可用，跳过情报搜索")
+                logger.info(f"{stock_name}({code}) 未获取到可用情报结果")
 
             # Step 4.5: Social sentiment intelligence (US stocks only)
             if self.social_sentiment_service is not None and self.social_sentiment_service.is_available and is_us_stock_code(code):

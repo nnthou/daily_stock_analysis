@@ -14,6 +14,7 @@ def _make_config() -> SimpleNamespace:
         save_context_snapshot=False,
         bocha_api_keys=[],
         tavily_api_keys=[],
+        anspire_api_keys=[],
         brave_api_keys=[],
         serpapi_keys=[],
         minimax_api_keys=[],
@@ -76,6 +77,24 @@ def test_social_sentiment_init_failure_logs_traceback(caplog):
     ]
     assert len(init_failure_records) == 1
     assert init_failure_records[0].exc_info is not None
+
+
+def test_longbridge_content_service_init_failure_logs_traceback_and_search_stays_available(caplog):
+    config = _make_config()
+    search_service = MagicMock()
+    search_service.is_available = True
+    social_service = MagicMock()
+    social_service.is_available = False
+
+    with patch("src.core.pipeline.SearchService", return_value=search_service), \
+         patch("src.core.pipeline.LongbridgeContentService", side_effect=RuntimeError("lb init boom")), \
+         patch("src.core.pipeline.SocialSentimentService", return_value=social_service), \
+         caplog.at_level(logging.WARNING, logger="src.core.pipeline"):
+        pipeline = _build_pipeline(config)
+
+    assert pipeline.longbridge_content_service is None
+    assert "Longbridge CLI 资讯服务初始化失败，将仅使用搜索服务" in caplog.text
+    assert pipeline.search_service is search_service
 
 
 def test_emit_progress_logs_context_when_callback_fails(caplog):
