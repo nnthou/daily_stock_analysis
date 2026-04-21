@@ -443,6 +443,13 @@ class Config:
     longbridge_app_secret: Optional[str] = None
     longbridge_access_token: Optional[str] = None
 
+    # === Longbridge CLI 资讯层配置 ===
+    # 与上方 OpenAPI Token 完全独立；CLI Token 通过 `longbridge auth login` 管理
+    longbridge_cli_enabled: bool = True
+    longbridge_cli_binary: str = "longbridge"
+    longbridge_cli_timeout: float = 4.0
+    longbridge_cli_cache_ttl: float = 300.0
+
     # === AI 分析配置 ===
     # LiteLLM unified model config (provider/model format, e.g. gemini/gemini-2.5-flash)
     litellm_model: str = ""  # Primary model; must include provider prefix when set explicitly
@@ -1115,6 +1122,10 @@ class Config:
             longbridge_app_key=os.getenv('LONGBRIDGE_APP_KEY') or None,
             longbridge_app_secret=os.getenv('LONGBRIDGE_APP_SECRET') or None,
             longbridge_access_token=os.getenv('LONGBRIDGE_ACCESS_TOKEN') or None,
+            longbridge_cli_enabled=parse_env_bool(os.getenv('LONGBRIDGE_CLI_ENABLED'), True),
+            longbridge_cli_binary=os.getenv('LONGBRIDGE_CLI_BINARY') or 'longbridge',
+            longbridge_cli_timeout=float(os.getenv('LONGBRIDGE_CLI_TIMEOUT') or 4.0),
+            longbridge_cli_cache_ttl=float(os.getenv('LONGBRIDGE_CLI_CACHE_TTL') or 300.0),
             litellm_model=litellm_model,
             litellm_fallback_models=litellm_fallback_models,
             llm_temperature=resolve_unified_llm_temperature(litellm_model),

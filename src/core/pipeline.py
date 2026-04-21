@@ -157,7 +157,14 @@ class StockAnalysisPipeline:
 
         # 初始化 Longbridge CLI 资讯服务（可选，初始化失败不应阻断主分析流程）
         try:
-            self.longbridge_content_service = LongbridgeContentService()
+            if getattr(self.config, "longbridge_cli_enabled", True):
+                self.longbridge_content_service = LongbridgeContentService(
+                    binary=self.config.longbridge_cli_binary,
+                    timeout_seconds=self.config.longbridge_cli_timeout,
+                    cache_ttl_seconds=self.config.longbridge_cli_cache_ttl,
+                )
+            else:
+                self.longbridge_content_service = None
         except Exception as exc:
             logger.warning("Longbridge CLI 资讯服务初始化失败，将仅使用搜索服务: %s", exc, exc_info=True)
             self.longbridge_content_service = None

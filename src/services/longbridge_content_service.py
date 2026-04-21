@@ -187,10 +187,14 @@ class LongbridgeContentService:
             )
         ]
 
-    def _normalize_date(self, value: Optional[str]) -> Optional[str]:
+    def _normalize_date(self, value: Any) -> Optional[str]:
         if not value:
             return None
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc).date().isoformat()
+        if isinstance(value, (int, float)):
+            dt = datetime.fromtimestamp(value, tz=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+        return dt.date().isoformat()
 
     def _get_cache(self, key: str) -> Optional[Dict[str, SearchResponse]]:
         with self._cache_lock:
