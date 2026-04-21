@@ -3090,6 +3090,8 @@ class SearchService:
         if dimensions:
             requested = set(dimensions)
             search_dimensions = [item for item in search_dimensions if item["name"] in requested]
+            if not search_dimensions:
+                return {}
 
         search_days = self._effective_news_window_days()
         target_per_dimension = 3

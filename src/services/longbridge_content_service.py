@@ -91,7 +91,7 @@ class LongbridgeContentService:
                 timeout=self.timeout_seconds,
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            logger.info("Longbridge CLI command skipped at boundary: %s", exc)
+            logger.warning("Longbridge CLI command skipped at boundary: %s", exc)
             return None
 
         return json.loads(completed.stdout or "null")
@@ -147,7 +147,10 @@ class LongbridgeContentService:
         for row in rows[:3]:
             metrics = []
             for detail in row.get("details", [])[:5]:
-                metrics.append(f"{detail['key']}={detail['estimate']}")
+                key = detail.get("key")
+                estimate = detail.get("estimate")
+                if key is not None and estimate is not None:
+                    metrics.append(f"{key}={estimate}")
             if not metrics:
                 continue
             period = row.get("period") or payload.get("current_period") or "current"
