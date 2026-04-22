@@ -1211,18 +1211,31 @@ class GeminiAnalyzer:
                             exc,
                         )
 
-                response = self._dispatch_litellm_completion(
-                    model,
-                    call_kwargs,
-                    config=config,
-                    use_channel_router=use_channel_router,
-                    router_model_names=router_model_names,
-                )
+                # 空响应时同模型重试，给代理层恢复时间
+                max_empty_retries = 2
+                for empty_retry in range(max_empty_retries + 1):
+                    response = self._dispatch_litellm_completion(
+                        model,
+                        call_kwargs,
+                        config=config,
+                        use_channel_router=use_channel_router,
+                        router_model_names=router_model_names,
+                    )
 
-                if response and response.choices and response.choices[0].message.content:
-                    usage = self._normalize_usage(getattr(response, "usage", None))
-                    return (response.choices[0].message.content, model, usage)
-                raise ValueError("LLM returned empty response")
+                    if response and response.choices and response.choices[0].message.content:
+                        usage = self._normalize_usage(getattr(response, "usage", None))
+                        return (response.choices[0].message.content, model, usage)
+
+                    if empty_retry < max_empty_retries:
+                        logger.warning(
+                            "[LiteLLM] %s returned empty response, retrying same model (%d/%d)...",
+                            model,
+                            empty_retry + 1,
+                            max_empty_retries,
+                        )
+                        time.sleep(1.0)
+                    else:
+                        raise ValueError("LLM returned empty response")
 
             except Exception as e:
                 logger.warning(f"[LiteLLM] {model} failed: {e}")
